@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>經典貪食蛇：五關斬六將</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #2ecc71;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #game-container {
+            display: flex;
+            gap: 20px;
+            background-color: #34495e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        #panel-left {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #info-board {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            background: #2c3e50;
+            padding: 10px;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        canvas {
+            background-color: #111;
+            border: 4px solid #2ecc71;
+            border-radius: 5px;
+        }
+
+        #panel-right {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        .box {
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .box h3 {
+            margin-top: 0;
+            color: #f1c40f;
+            border-bottom: 2px solid #34495e;
+            padding-bottom: 5px;
+            text-align: center;
+        }
+
+        #leaderboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px dashed #34495e;
+        }
+
+        #controls-instruction p {
+            margin: 5px 0;
+            font-size: 0.9rem;
+            color: #bdc3c7;
+        }
+
+        #game-over-screen {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e74c3c;
+            z-index: 10;
+        }
+
+        #game-over-screen h2 {
+            color: #e74c3c;
+            margin-top: 0;
+        }
+
+        button {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background-color: #27ae60;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            width: 80%;
+            margin-top: 10px;
+            border-radius: 4px;
+            border: none;
+            text-align: center;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>闖關貪食蛇 🐍</h1>
+
+    <div id="game-container">
+        <div id="panel-left">
+            <div id="info-board">
+                <div>關卡: <span id="level">1</span>/5</div>
+                <div>目標寶石: <span id="gems-needed">0</span></div>
+                <div>目前得分: <span id="score">0</span></div>
+                <div>時間: <span id="timer">0</span>秒</div>
+            </div>
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+        </div>
+
+        <div id="panel-right">
+            <div class="box">
+                <h3>🏆 前五名排行榜</h3>
+                <ol id="leaderboard-list">
+                    <li>暫無資料</li>
+                </ol>
+            </div>
+            <div class="box" id="controls-instruction">
+                <h3>🎮 操作說明</h3>
+                <p>使用鍵盤 <b>↑ ↓ ← →</b> 或 <b>W A S D</b> 控制蛇的方向。</p>
+                <p>每過一關，地圖上的寶石（食物）數量會增加，蛇的速度也會變快！</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-screen" id="overlay">
+        <h2 id="over-title">遊戲結束</h2>
+        <p id="over-msg"></p>
+        <div id="name-input-section">
+            <p>恭喜榮登排行榜！請輸入你的名字：</p>
+            <input type="text" id="player-name" maxlength="10" placeholder="名字"><br>
+        </div>
+        <button id="action-btn" onclick="handleAction()">確認</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // 遊戲設定
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+        
+        // 遊戲變數
+        let snake = [];
+        let velocity = { x: 1, y: 0 };
+        let nextVelocity = { x: 1, y: 0 };
+        let gems = [];
+        let score = 0;
+        let level = 1;
+        let maxLevels = 5;
+        let gemsEatenInLevel = 0;
+        
+        // 計時器變數
+        let gameTime = 0;
+        let timerInterval = null;
+        let gameInterval = null;
+        
+        // 關卡設定 (每關需要的寶石數與基礎速度)
+        const levelConfig = {
+            1: { gemsRequired: 5, speed: 140 },
+            2: { gemsRequired: 8, speed: 120 },
+            3: { gemsRequired: 12, speed: 100 },
+            4: { gemsRequired: 15, speed: 85 },
+            5: { gemsRequired: 20, speed: 70 }
+        };
+
+        // 遊戲狀態
+        let isGameOver = false;
+
+        // 初始化
+        window.onload = function() {
+            document.addEventListener("keydown", changeDirection);
+            loadLeaderboard();
+            initGame();
+        };
+
+        function initGame() {
+            // 初始化蛇（重生在中間）
+            snake = [
+                { x: 10, y: 10 },
+                { x: 9, y: 10 },
+                { x: 8, y: 10 }
+            ];
+            velocity = { x: 1, y: 0 };
+            nextVelocity = { x: 1, y: 0 };
+            
+            // 重設關卡進度（如果是第一關才重設分數與時間）
+            if (level === 1) {
+                score = 0;
+                gameTime = 0;
+                if(timerInterval) clearInterval(timerInterval);
+                timerInterval = setInterval(() => {
+                    gameTime++;
+                    document.getElementById("timer").innerText = gameTime;
+                }, 1000);
+            }
+
+            gemsEatenInLevel = 0;
+            updateUI();
+            
+            // 根據關卡產生對應數量的寶石
+            gems = [];
+            for (let i = 0; i < level); 
+            // 這裡修正：我們讓畫面上同時存在的寶石數隨關卡變多
+            // 關卡 1 有 1 顆，關卡 5 畫面上同時有 5 顆寶石
+            for (let i = 0; i < level; i++) {
+                gems.push(generateGem());
+            }
+
+            // 啟動遊戲主迴圈
+            if(gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, levelConfig[level].speed);
+        }
+
+        function gameLoop() {
+            updateSnake();
+            if (checkCollision()) {
+                endGame(false);
+                return;
+            }
+            checkGemEaten();
+            draw();
+        }
+
+        function updateSnake() {
+            velocity = nextVelocity;
+            // 複製蛇頭並移動
+            const head = { x: snake[0].x + velocity.x, y: snake[0].y + velocity.y };
+            snake.unshift(head);
+            // 預先刪除蛇尾，如果吃到寶石後面會加回來
+            snake.pop();
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+            // 撞牆
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                return true;
+            }
+            // 撞到自己
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function checkGemEaten() {
+            const head = snake[0];
+            
+            for (let i = 0; i < gems.length; i++) {
+                if (head.x === gems[i].x && head.y === gems[i].y) {
+                    // 吃到寶石：蛇變長 (把剛剛 pop 掉的長度加回來)
+                    snake.push({ ...snake[snake.length - 1] });
+                    
+                    score += 10 * level; // 越高等級分數越高
+                    gemsEatenInLevel++;
+                    
+                    // 更換該顆寶石的位置
+                    gems[i] = generateGem();
+                    updateUI();
+
+                    // 檢查是否達到過關條件
+                    if (gemsEatenInLevel >= levelConfig[level].gemsRequired) {
+                        nextLevel();
+                    }
+                    break;
+                }
+            }
+        }
+
+        function generateGem() {
+            let newGem;
+            let onSnake = true;
+            while (onSnake) {
+                newGem = {
+                    x: Math.floor(Math.random() * tileCount),
+                    y: Math.floor(Math.random() * tileCount)
+                };
+                onSnake = snake.some(segment => segment.x === newGem.x && segment.y === newGem.y) ||
+                          gems.some(gem => gem && gem.x === newGem.x && gem.y === newGem.y);
+            }
+            return newGem;
+        }
+
+        function nextLevel() {
+            clearInterval(gameInterval);
+            if (level < maxLevels) {
+                level++;
+                alert(`🎉 恭喜通過第 ${level-1} 關！即將進入第 ${level} 關。`);
+                initGame();
+            } else {
+                // 五關全過，通關！
+                endGame(true);
+            }
+        }
+
+        function draw() {
+            // 清空畫布
+            ctx.fillStyle = "#111111";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 畫蛇
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? "#2ecc71" : "#27ae60"; // 蛇頭顏色較亮
+                ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+
+            // 畫寶石
+            gems.forEach(gem => {
+                ctx.fillStyle = "#e74c3c"; // 寶石顏色
+                ctx.beginPath();
+                let centerX = gem.x * gridSize + gridSize/2;
+                let centerY = gem.y * gridSize + gridSize/2;
+                ctx.arc(centerX, centerY, gridSize/2 - 2, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
+
+        function changeDirection(event) {
+            const keyPressed = event.keyCode;
+            const LEFT = 37, UP = 38, RIGHT = 39, DOWN = 40;
+            const W = 87, A = 65, S = 83, D = 68;
+
+            const goingUp = velocity.y === -1;
+            const goingDown = velocity.y === 1;
+            const goingRight = velocity.x === 1;
+            const goingLeft = velocity.x === -1;
+
+            if ((keyPressed === LEFT || keyPressed === A) && !goingRight) {
+                nextVelocity = { x: -1, y: 0 };
+            }
+            if ((keyPressed === UP || keyPressed === W) && !goingDown) {
+                nextVelocity = { x: 0, y: -1 };
+            }
+            if ((keyPressed === RIGHT || keyPressed === D) && !goingLeft) {
+                nextVelocity = { x: 1, y: 0 };
+            }
+            if ((keyPressed === DOWN || keyPressed === S) && !goingUp) {
+                nextVelocity = { x: 0, y: 1 };
+            }
+        }
+
+        function updateUI() {
+            document.getElementById("level").innerText = level;
+            document.getElementById("score").innerText = score;
+            document.getElementById("gems-needed").innerText = `${gemsEatenInLevel}/${levelConfig[level].gemsRequired}`;
+        }
+
+        function endGame(isWin) {
+            clearInterval(gameInterval);
+            clearInterval(timerInterval);
+            
+            const screen = document.getElementById("game-over-screen");
+            const title = document.getElementById("over-title");
+            const msg = document.getElementById("over-msg");
+            const nameInputSection = document.getElementById("name-input-section");
+
+            screen.style.display = "block";
+            
+            if (isWin) {
+                title.innerText = "🏆 恭喜通關！";
+                title.style.color = "#f1c40f";
+                msg.innerText = `你成功征服了所有關卡！總得分：${score}，總耗時：${gameTime} 秒。`;
+            } else {
+                title.innerText = "Game Over 💥";
+                title.style.color = "#e74c3c";
+                msg.innerText = `很遺憾你撞牆或咬到自己了。最終得分：${score}。`;
+            }
+
+            // 檢查是否進入前五名
+            if (checkLeaderboardQualification(score)) {
+                nameInputSection.style.display = "block";
+            } else {
+                nameInputSection.style.display = "none";
+            }
+        }
+
+        function handleAction() {
+            const nameInputSection = document.getElementById("name-input-section");
+            if (nameInputSection.style.display === "block") {
+                const name = document.getElementById("player-name").value.trim() || "無名英雄";
+                saveScore(name, score);
+            }
+            
+            // 重設並重新開始遊戲
+            document.getElementById("game-over-screen").style.display = "none";
+            document.getElementById("player-name").value = "";
+            level = 1;
+            initGame();
+        }
+
+        // --- 排行榜功能邏輯 (使用 LocalStorage 儲存) ---
+        function loadLeaderboard() {
+            const scores = JSON.parse(localStorage.getItem("snake_leaderboard")) || [];
+            const listEl = document.getElementById("leaderboard-list");
+            listEl.innerHTML = "";
+            
+            if (scores.length === 0) {
+                listEl.innerHTML = "<li>暫無資料</li>";
+                return;
+            }
+
+            scores.forEach((entry, index) => {
+                const li = document.createElement("li");
+                li.innerHTML = `<span>${index + 1}. ${entry.name}</span> <span>${entry.score} 分</span>`;
+                listEl.appendChild(li);
+            });
+        }
+
+        function checkLeaderboardQualification(currentScore) {
+            if (currentScore === 0) return false;
+            const scores = JSON.parse(localStorage.getItem("snake_leaderboard")) || [];
+            if (scores.length < 5) return true;
+            return currentScore > scores[scores.length - 1].score;
+        }
+
+        function saveScore(name, currentScore) {
+            let scores = JSON.parse(localStorage.getItem("snake_leaderboard")) || [];
+            scores.push({ name: name, score: currentScore });
+            // 由高到低排序
+            scores.sort((a, b) => b.score - a.score);
+            // 只取前五名
+            scores = scores.slice(0, 5);
+            localStorage.setItem("snake_leaderboard", JSON.stringify(scores));
+            loadLeaderboard();
+        }
+    </script>
+</body>
+</html>
